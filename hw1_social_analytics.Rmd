@@ -1,0 +1,299 @@
+---
+title: "hw1_social_network_analytics"
+author: "JR"
+date: "2022-10-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r import_files, echo = F}
+library(igraph)
+library(data.table)
+library(tidyverse)
+library(dplyr)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+``` {r read_data, echo = T}
+data1 <- read.csv("C:\\Users\\jaern\\OneDrive\\Desktop\\social_networking_analytics\\HW1\\social_and_task_network.csv", sep = ",", head= T)
+
+setwd("C:\\Users\\jaern\\OneDrive\\Desktop\\social_networking_analytics\\HW1")
+
+head(data1)
+```
+
+##Queston 1
+
+As the excercise requested, I considered social and task as separate networks
+``` {r social and task, echo = T}
+df_social <- data1[,1:3]
+df_task <- data1[,c(1,2,4)]
+```
+
+Then, I filtered out the social and task ties that were significant (higher than the mean)
+``` {r social, echo = T}
+#this filters out the social_ties that exist between two individuals
+df_social_mod <- filter(df_social, social_tie > 0)
+
+social_gd <- graph_from_data_frame(df_social_mod, directed = T)
+plot(social_gd)
+```
+```{r task, echo = T}
+df_task_mod <- filter(df_task, task_tie > 0)
+
+task_gd <- graph_from_data_frame(df_task_mod, directed = T)
+plot(task_gd)
+```
+
+##1A
+Calculate in degree, out degree, closeness, betweeness, and the page rank centrallity of both social and task ties
+
+First task:
+```{r degree_for_task, echo = T}
+#indegree of task tie dataframe filtered out to see only relationships
+in_df_task_mod <- degree(task_gd, mode = "in")
+out_df_task_mod <- degree(task_gd, mode = "out")
+closeness_df_task_mod <- closeness(task_gd, mode = "total")
+betweeness_task <- betweenness(task_gd, normalized = TRUE)
+page_rank_task <- page_rank(task_gd, directed = T)
+```
+
+```{r indegree of task, echo = T}
+#in degree
+in_df_task_mod
+```
+
+```{r outdegree_of_task, echo =T}
+#out degree
+out_df_task_mod
+
+
+```
+
+```{r closeness_task}
+#closeness of task
+closeness_df_task_mod
+
+
+```
+
+```{r betweenness_task}
+#betweenness of task
+betweeness_task
+
+```
+
+```{r page_rank_of_task, echo = T}
+#page rank of task
+page_rank_task
+```
+Now for social:
+```{r}
+#calculations for 1A
+in_df_social_mod <- degree(social_gd, mode = "in")
+out_df_social_mod <- degree(social_gd, mode = "out")
+closeness_df_social_mod <- closeness(social_gd, mode ="total")
+betweeness_social <- betweenness(social_gd, normalized = T)
+page_rank_social <- page_rank(social_gd, directed = T)
+```
+
+```{r indegree}
+in_df_social_mod
+```
+
+```{r outdegree}
+out_df_social_mod
+```
+
+```{r closeness}
+closeness_df_social_mod
+```
+
+```{r betweenness}
+betweeness_social
+```
+
+
+```{r page_rank}
+page_rank_social
+```
+
+##1B
+I put all the component of social and task together to later merge them together to analyze their correlation
+``` {r merge_all}
+#social into one dataframe
+#we used the first column of page_ranks because we only want vectors only
+social_dt <- data.frame(in_df_social_mod, out_df_social_mod, closeness_df_social_mod, betweeness_social, page_rank_social[1])
+
+#task into one dataframe
+task_dt <- data.frame(in_df_task_mod, out_df_task_mod, closeness_df_task_mod, betweeness_task, page_rank_task[1])
+```
+
+I joined it using the merge function
+```{r 1B}
+#1b
+#join the two data
+total_df <- merge(social_dt, task_dt, by.x=0, by.y=0)
+```
+
+And this will output the correlation between the two: social and task
+```{r correlation between the two}
+cor(total_df[,2:6],total_df[,7:11])
+```
+After looking at the correlation, I realized that the betweenness of both social and task had the highest correlation. This is a significant find as we now know that individuals who have high betweenness mean that they have a higher influence on the transfer of information throughout the network, and the correlation tells us that those who have high influence in social relationships will inherently have high influence in their task relationships as well
+
+##Question 2
+I filtered out the data to consider both social and task that did not have a 0 in their relationship
+```{r calculate_mean}
+data_mod <- filter(data1, social_tie > 0 | task_tie > 0)
+#get mean value of social ties
+mean_social <- mean(subset(data_mod, social_tie > 0)$social_tie)
+#get mean value of task ties; use modified version (tasktie>0) since it is conditional to having the ties
+mean_task <-  mean(subset(data_mod, task_tie > 0)$task_tie)
+```
+
+I set the ones that were higher than its mean as strong and if they were less than the mean i considered them as weak.
+
+The result can tell you more on what I have done on data_mod
+```{r set_strong}
+data_mod$social_strength <- ifelse(data_mod$social_tie > mean_social, 'Strong', 'Weak')
+data_mod$tie_strength <- ifelse(data_mod$task_tie > mean_task, 'Strong', 'Weak')
+
+data_mod
+```
+
+Next to make the graph more readable, I colored the strong ones as green and weak ones as red
+``` {r make_graph}
+g3 <- graph_from_data_frame(data_mod, directed = TRUE, vertices = unique(data1[,1]))                            
+
+#setting colors for strong and weak ties
+E(g3)$color[E(g3)$social_strength == "Strong" | E(g3)$tie_strength == "Strong" ] <- 'Green'
+E(g3)$color[E(g3)$social_strength == "Weak" & E(g3)$tie_strength == "Weak" ] <- 'Red'
+
+
+#plot the graph
+plot(g3, edge.arrow.size = .15)
+```
+
+```{r 2b}
+#2b
+#this tells us how many percentage of the nodes that are violating the triadic closure
+## around 68% of the network violates strong triadic closure 
+strong=data_mod%>%filter(data_mod$social_strength=="Strong" | data_mod$tie_strength=="Strong")
+g_strong=graph_from_edgelist(as.matrix(strong[,c(1,2)]),directed = TRUE)
+matrix_strong=as_adjacency_matrix(g_strong)
+matrix_total=as_adjacency_matrix(g3)
+
+path=matrix_strong%*%matrix_strong
+
+total_tie <- nrow(df_social_mod) + nrow(df_task_mod)
+p <- sum((matrix_total==0&path!=0))/total_tie
+1-p
+```
+This tells us how many percentage of the nodes that are violating the triadic closure
+Around 68% of the network violates strong triadic closure
+
+```{r 3_get_betweeness}
+social_betweenness = edge_betweenness(g3, e = E(g3)[get.edge.attribute(g3, name = "social_tie")!= 0])
+social_betweenness
+
+task_betweenness = edge_betweenness(g3, e=E(g3)[get.edge.attribute(g3,name = "task_tie")!= 0])
+task_betweenness
+```
+
+```{r graph the plot}
+library(ggplot2)
+
+df_social_mod$social_strength <- factor(df_social_mod$social_tie > mean_social, labels = c('weak', 'Strong'))
+
+df_social_mod$social_tie <- as.factor(df_social_mod$social_tie)
+
+ggplot(df_social_mod, aes(x = social_tie, y= social_betweenness, color = social_strength)) + geom_point()
+
+
+df_task_mod$task_strength <- factor(df_task_mod$task_tie > mean_task, labels = c('weak', 'Strong'))
+df_task_mod$task_tie <- as.factor(df_task_mod$task_tie)
+ggplot(df_task_mod, aes(x = task_tie, y=task_betweenness, color =task_strength)) + geom_point()
+```
+
+##3B
+high betweenness depends on the overall network structure. If the edge is a bridge that connect a node to the overall network then it will have a high edge_betweenness
+if it is not bridge and there are multiple different routes to get to the same node, then it will have a lower edge_betweenness
+
+
+##Question 4
+
+```{r question_4}
+mtx <- as_adjacency_matrix(g3, sparse = FALSE)
+mtx_2 <- mtx%*%mtx
+mtx_3 <- mtx_2%*%mtx
+mtx_4 <- mtx_3%*%mtx
+mtx_5 <- mtx_4%*%mtx
+sum(mtx_2 == 0)
+sum(mtx_3 == 0)
+sum(mtx_4 == 0)
+sum(mtx_5 == 0)
+
+dist_mtx <- distances(g3)
+sum(dist_mtx == "Inf")
+```
+
+the matrix function functions differently than the distance function. It is not as accurate to use distance function in this case because when we run the different powers of matrix (which is getting the number of walks equalling to however many times you raise the power of) it gives us different answers. For example, the nodes of 4 and 8 which is separate from the network itself, it has walks for length of 1,3, and 5 but not for 2 or 4. However when distance function is used it does not capture the same result as the matrix function.
+
+##Question 5
+```{r 5}
+#5
+
+star = make_star(20, "undirected")
+plot(star)
+centr_degree(star)
+total_Cdegree<-sum(centralization.degree(star,mode="all")$res)
+(1/((20-1)*(20-2)))*(20*max(centralization.degree(star,mode="all")$res)-total_Cdegree)
+
+
+ring = make_ring(20)
+plot(ring)
+total_Cdegree<-sum(centralization.degree(ring,mode="all")$res)
+(1/((20-1)*(20-2)))*(20*max(centralization.degree(ring,mode="all")$res)-total_Cdegree) 
+
+
+# closeness does not have same results as the star graph since it is not 1
+total_Clodegree_star<-sum(centralization.closeness(star,mode="total")$res)
+(1/((20-1)*(20-2)))*(20*max(centralization.closeness(star,mode="total")$res)-total_Clodegree_star)
+
+total_Clodegree_ring<-sum(centralization.closeness(ring,mode="total")$res)
+(1/((20-1)*(20-2)))*(20*max(centralization.closeness(ring,mode="total")$res)-total_Clodegree_ring)
+
+# betweenness does not have same results as the star graph since it is not 1
+total_Btwdegree<-sum(centralization.betweenness(star,directed = TRUE)$res)
+(1/((20-1)*(20-2)))*(20*max(centralization.betweenness(star,directed = TRUE)$res)-total_Btwdegree)
+
+
+total_Btwdegree<-sum(centralization.betweenness(ring,directed = FALSE)$res)
+(1/((20-1)*(20-2)))*(20*max(centralization.betweenness(ring,directed = FALSE)$res)-total_Btwdegree)
+
+#it makes sense that betweenness will be equal because since the shape is in a circular shape with the ring
+#then the bewteenness will have to all be the same
+```
+ the star network has network-level measure of degree centrality of 1 and
+ the ring network has network-level measure of degree centrality of 0.
+ 
+ The star's betweeness and closeness differ whereas the ring's betweenness and closeness does not
